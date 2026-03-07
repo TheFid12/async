@@ -1,0 +1,17 @@
+[
+  {
+    "id": "file_task_1",
+    "payload": "Обработать входящий отчет от партнера A"
+  },
+  {
+    "id": "file_task_2",
+    "payload": {
+      "action": "recalculate_stats",
+      "target_id": 42
+    }
+  },
+  {
+    "id": "file_task_3",
+    "payload": ["user_101", "user_102", "user_103"]
+  }
+]

@@ -7,6 +7,10 @@ from src.source import (
 
 
 def main() -> None:
+    """
+    Точка входа в модуль.
+    В sources указываются источники задач.
+    """
     sources = [
         FileTaskSource("tasks.json"),
         GeneratorTaskSource(count=3, prefix="task"),
