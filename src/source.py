@@ -1,10 +1,7 @@
 from typing import Protocol, runtime_checkable, Any
 import json
 import logging
-import random
 from pathlib import Path
-
-from src.task import Task, StatusEnum, PRIORITIES
 
 logger = logging.getLogger(__name__)
 
@@ -60,4 +57,7 @@ class ApiSource(Source):
 
     def add_task(self, payload: Any) -> None:
         self._tasks.append({"payload": payload})
+
+
+from src.handler import collect_all, process_task
 
