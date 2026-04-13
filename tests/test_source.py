@@ -1,7 +1,7 @@
 import pytest
 import json
 from src.task import StatusEnum
-from src.source import Source, FileSource, GeneratorSource, ApiSource, collect_all, process_task
+from src.source import Source, FileSource, GeneratorSource, ApiSource, collect_all
 
 def test_source_protocol():
     assert isinstance(GeneratorSource(2), Source)
