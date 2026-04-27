@@ -1,53 +1,37 @@
+﻿import asyncio
 import logging
 import random
 from src.task import Task, StatusEnum, PRIORITIES
 from src.source import Source
+from src.task_queue import TaskQueue
+from src.executor import DefaultHandler, TaskExecutor
 
 logger = logging.getLogger(__name__)
 
-def process_task(task: Task) -> None:
-    """
-    Обработчик задачи. Переводит статусы и печатает результат.
-    """
-    if task.status != StatusEnum.NOT_STARTED:
-        raise ValueError("Нельзя обработать задачу, которая уже начата или завершена")
-    
-    task.status = StatusEnum.PROCESSING
-    if not task.payload:
-        task.status = StatusEnum.CANCELLED
-        return
-        
-    print(task)
-    task.status = StatusEnum.COMPLETED
-
-def collect_all(sources: list[Source]) -> list[Task]:
-    """
-    Собирает payload из всех источников, создает из них задачи
-    и обрабатывает каждую задачу.
-    
-    :return: Список всех собранных задач
-    """
+async def collect_and_process(sources: list[Source]) -> list[Task]:
     tasks: list[Task] = []
+    logger.info("Начало сбора задач из переданных источников...")
     
-    logger.info("Запуск получения задач из источников")
     for source in sources:
         if not isinstance(source, Source):
-            logger.error(f"Ошибка добавления источника {source}")
-            raise TypeError("Источник не соответствует протоколу Source")
+            logger.error("Недопустимый тип источника: %s", type(source).__name__)
+            raise TypeError("Источник должен строго соответствовать типу Source.")
             
-        source_name = type(source).__name__
-        logger.info(f"Получение задач из источника: {source_name}")
+        logger.info("Сбор из: %s", type(source).__name__)
         
         for payload in source.get_tasks():
-            new_id = len(tasks) + 1
-            rnd_priority = random.choice(PRIORITIES)
-            task = Task(id=new_id, payload=payload, priority=rnd_priority)
+            priority = random.choice(PRIORITIES)
+            task = Task(id=len(tasks) + 1, payload=payload, priority=priority)
             tasks.append(task)
+            logger.debug("Создана %s (приоритет=%s)", task.id, priority)
             
-    logger.info(f"Сбор завершен. Всего задач: {len(tasks)}. Начинаем обработку.")
+    logger.info("Собрано %d задач. Переход к фазе выполнения...", len(tasks))
     
-    for task in tasks:
-        process_task(task)
+    queue = TaskQueue(initial=tasks)
+    await queue.signal_done()
+    
+    async with TaskExecutor(queue, DefaultHandler()) as executor:
+        await executor.run()
         
-    logger.info("Обработка задач окончена")
+    logger.info("Все ветви выполнения завершены без ошибок.")
     return tasks
