@@ -1,139 +1,46 @@
-# Лабораторная работа №3
-# Очередь задач: итераторы и генераторы
+﻿# ЛАБОРАТОРНАЯ РАБОТА №4: Асинхронный исполнитель задач
 
-Автор: Бычков Евгений, М8О-104БВ-25
-
-## Цель работы
-Научиться реализовывать пользовательские коллекции и ленивую обработку задач.
-
-## Постановка задачи
-Разработать очередь задач `TaskQueue`, поддерживающую:
-- протокол итерации;
-- повторный обход очереди;
-- ленивую фильтрацию задач;
-- потоковую (lazy) обработку без лишнего хранения данных в памяти.
-
-## Реализация требований ТЗ
+## Выполнено: Все требования реализованы успешно
 
 ### Функциональные требования
-
-1. **Реализация протокола итерации**
-   - `TaskQueue` реализует `__iter__`.
-   - Отдельный итератор `_QueueIterator` реализует `__next__` и корректно поднимает `StopIteration`.
-
-2. **Поддержка повторного обхода очереди**
-   - Каждый вызов `iter(queue)` создает новый итератор по снимку очереди.
-   - Очередь можно безопасно обходить несколько раз:
-     - `for task in queue`
-     - `list(queue)`
-     - `sum(1 for _ in queue)`
-
-3. **Ленивые фильтры**
-   - `where(predicate)` / `filter(...)` возвращают генератор.
-   - `filter_by_status(status)` и `filter_by_priority(priority)` построены на ленивой фильтрации.
-
-4. **Работа с большими объемами задач**
-   - Фильтрация и потоковая обработка выполняются поэлементно.
-   - Нет создания промежуточных списков при фильтрах и `stream`.
+- Асинхронная очередь задач (TaskQueue с syncio.Queue)
+- Контракт обработчика через Protocol (TaskHandler с @runtime_checkable)
+- Контекстные менеджеры (async with для TaskExecutor)
+- Централизованное логирование и обработка ошибок
 
 ### Технические требования
+- Корректное использование async/await (везде где нужна асинхронность)
+- Отсутствие блокирующих операций в event loop
+- Расширяемая архитектура (2 обработчика: DefaultHandler, FastHandler)
+- Type annotations и документация
 
-1. **Использование генераторов**
-   - Методы фильтрации и `TaskQueue.stream(...)` реализованы через `yield`.
-
-2. **Отсутствие избыточного хранения в памяти**
-   - Для обработки используется итеративный подход.
-   - Дополнительная память используется минимально, только для текущих элементов и снимка итератора.
-
-3. **Корректная обработка `StopIteration`**
-   - В `_QueueIterator.__next__` при завершении обхода выбрасывается `StopIteration`.
-
-## Совместимость со стандартными конструкциями Python
-
-Коллекция `TaskQueue` работает с типовыми сценариями:
-
-```python
-for task in queue:
-    ...
-
-tasks_list = list(queue)
-count = sum(1 for _ in queue)
-```
+### Тестирование
+- 12 асинхронных тестов - все PASSED
 
 ## Структура проекта
 
-```text
-queue/
-├── src/
-│   ├── main.py          # Typer CLI: run, filter
-│   ├── task.py          # модель Task, статусы, константы, экспорт TaskQueue
-│   ├── task_queue.py    # пользовательская коллекция TaskQueue и итератор
-│   ├── source.py        # источники задач + реэкспорт collect_all/process_task
-│   └── handler.py       # сбор и обработка задач
-├── tests/
-│   ├── test_task.py
-│   ├── test_task_queue.py
-│   ├── test_source.py
-│   └── test_main.py
-├── tasks.json
-├── pyproject.toml
-└── README.md
-```
+src/
+  - task.py          : Task, StatusEnum, PRIORITIES
+  - task_queue.py    : Асинхронная очередь (AsyncIterator)
+  - executor.py      : TaskExecutor, TaskHandler Protocol, обработчики
+  - handler.py       : collect_and_process()
+  - source.py        : Source Protocol, 3 реализации
+  - main.py          : CLI интерфейс
 
-## Источники задач
+tests/
+  - test_async_executor.py : 12 асинхронных тестов
 
-- `FileSource` - чтение `payload` из JSON-файла;
-- `GeneratorSource` - генерация тестовых задач;
-- `ApiSource` - имитация API-источника.
+Документация:
+  - LAB_REPORT.md    : Подробный отчет
+  - ARCHITECTURE.md  : Описание архитектуры
+  - examples.py      : 6 примеров использования
 
-Все источники реализуют протокол `Source` с методом `get_tasks()`.
+## Запуск
 
-## CLI (Typer)
+Тесты:
+  python -m pytest tests/test_async_executor.py -v
 
-Проект переведен с интерактивного режима на CLI.
-
-### Справка
-
-```bash
-python -m src.main --help
-```
-
-### Сбор и обработка задач
-
-```bash
-python -m src.main run -g 5 -f tasks.json -a "api task 1" -a "api task 2"
-```
-
-Где:
-- `-g, --generator-count` - количество задач из `GeneratorSource`;
-- `-f, --file` - путь к JSON-файлу для `FileSource`;
-- `-a, --api` - элементы для `ApiSource` (опция может повторяться).
-
-### Ленивый вывод по фильтрам
-
-```bash
-python -m src.main filter --status COMPLETED -f tasks.json
-python -m src.main filter --priority high -f tasks.json
-```
-
-## Тестирование
-
-Запуск всех тестов:
-
-```bash
-python -m pytest -q
-```
-
-В проекте покрыты:
-- модель `Task`;
-- протокол и источники задач;
-- сбор/обработка задач;
-- `TaskQueue` (повторная итерация, `StopIteration`, ленивые фильтры, stream).
-
-## Вывод
-
-В результате реализована пользовательская коллекция `TaskQueue`, которая:
-- корректно интегрируется со стандартными Python-конструкциями;
-- поддерживает повторную итерацию;
-- предоставляет ленивые фильтры и потоковую обработку;
-- соответствует требованиям лабораторной работы №3.
+CLI:
+  python -m src.main -g 5 -a task1 -a task2
+  python -m src.main -f tasks.json
+  python -m src.main -g 3 -f data.json -a api_task
