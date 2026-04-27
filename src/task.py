@@ -1,23 +1,19 @@
-from datetime import datetime
+﻿from datetime import datetime
 from enum import Enum
 from typing import Any
-from src.task_queue import TaskQueue
-
 
 class StatusEnum(Enum):
-    NOT_STARTED = "Not started"
-    PROCESSING = "Processing"
-    COMPLETED = "Completed"
-    CANCELLED = "Cancelled"
+    NOT_STARTED = "Не начата"
+    PROCESSING = "В обработке"
+    COMPLETED = "Завершена"
+    CANCELLED = "Отменена"
 
-
-PRIORITIES = ("low", "medium", "high", "critical")
-
+PRIORITIES = ("низкий", "средний", "высокий", "критический")
 
 class Task:
     __slots__ = ("_num_id", "_priority", "_status", "_created_at", "payload")
 
-    def __init__(self, id: int, payload: Any, priority: str = "medium") -> None:
+    def __init__(self, id: int, payload: Any, priority: str = "средний") -> None:
         self._num_id = int(id)
         self.payload = payload
         self._created_at = datetime.now()
@@ -56,7 +52,7 @@ class Task:
             priority = str(value).lower()
 
         if priority not in PRIORITIES:
-            raise ValueError(f"Недопустимый приоритет. Доступные: {PRIORITIES}")
+            raise ValueError(f"Недопустимый приоритет. Допустимые значения: {PRIORITIES}")
         self._priority = priority
 
     @property
@@ -66,10 +62,9 @@ class Task:
     @status.setter
     def status(self, value: StatusEnum) -> None:
         if self._status in (StatusEnum.CANCELLED, StatusEnum.COMPLETED):
-            raise ValueError(f"Нельзя менять статус {self._status}")
+            raise ValueError(f"Невозможно изменить статус из {self._status}")
         if value == StatusEnum.NOT_STARTED and self._status != StatusEnum.NOT_STARTED:
-            raise ValueError(f"Нельзя поменять статус {self._status} на {StatusEnum.NOT_STARTED}")
+            raise ValueError(f"Невозможно вернуть статус из {self._status} в {StatusEnum.NOT_STARTED}")
         self._status = value
 
-
-__all__ = ["StatusEnum", "PRIORITIES", "Task", "TaskQueue"]
+__all__ = ["StatusEnum", "PRIORITIES", "Task"]
