@@ -1,20 +1,20 @@
+﻿import asyncio
 import logging
 from pathlib import Path
 
 import typer
 
-from src.handler import collect_all
+from src.handler import collect_and_process
 from src.source import ApiSource, FileSource, GeneratorSource, Source
-from src.task import StatusEnum, TaskQueue
+from src.task import StatusEnum
 
-app = typer.Typer(help="CLI для лабораторной №3: очередь задач и ленивые генераторы.")
+app = typer.Typer(help="CLI утилита для асинхронного выполнения задач.")
 
 
 def configure_logging() -> None:
     logging.basicConfig(
-        filename="log.txt",
         level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         encoding="utf-8",
     )
 
@@ -34,56 +34,29 @@ def build_sources(
 
 @app.command("run")
 def run_command(
-    generator_count: int = typer.Option(0, "--generator-count", "-g"),
-    file_path: str | None = typer.Option(None, "--file", "-f"),
+    generator_count: int = typer.Option(5, "--generator-count", "-g", help="Количество генерируемых задач"),
+    file_path: str | None = typer.Option(None, "--file", "-f", help="Путь к JSON файлу с задачами"),
     api_payload: list[str] = typer.Option(
-        None, "--api", "-a", help="Повторяйте опцию: -a task1 -a task2"
+        None, "--api", "-a", help="Полезная нагрузка API задачи: -a task1 -a task2"
     ),
 ) -> None:
-    """Собрать задачи из источников и обработать их."""
     configure_logging()
-    sources = build_sources(generator_count, file_path, api_payload or [])
+    api_payload = api_payload or []
+    sources = build_sources(generator_count, file_path, api_payload)
 
     if not sources:
-        typer.echo("Не выбрано ни одного источника. Добавьте хотя бы один.")
+        typer.echo("Ошибка: Пожалуйста, укажите хотя бы один источник данных.")
         raise typer.Exit(code=1)
 
-    tasks = collect_all(sources)
-    queue = TaskQueue(tasks)
-    typer.echo(f"Обработано задач: {len(queue)}")
+    tasks = asyncio.run(collect_and_process(sources))
+    
+    completed = sum(1 for t in tasks if t.status == StatusEnum.COMPLETED)
+    cancelled = sum(1 for t in tasks if t.status == StatusEnum.CANCELLED)
+    
+    typer.echo(f"\nИтоги выполнения: {len(tasks)} обработано.")
+    typer.echo(f"  - Завершена: {completed}")
+    typer.echo(f"  - Отменена: {cancelled}")
 
 
-@app.command("filter")
-def filter_command(
-    by_status: StatusEnum | None = typer.Option(None, "--status"),
-    by_priority: str | None = typer.Option(None, "--priority"),
-    file_path: str = typer.Option("tasks.json", "--file", "-f"),
-) -> None:
-    """Показать задачи по ленивым фильтрам."""
-    configure_logging()
-    if not Path(file_path).exists():
-        typer.echo(f"Файл не найден: {file_path}")
-        raise typer.Exit(code=1)
-
-    tasks = collect_all([FileSource(file_path)])
-    queue = TaskQueue(tasks)
-
-    filtered = iter(queue)
-    if by_status is not None:
-        filtered = queue.filter_by_status(by_status)
-    if by_priority is not None:
-        base_iter = filtered if by_status is not None else iter(queue)
-        filtered = (task for task in base_iter if task.priority == by_priority.lower())
-
-    for task in filtered:
-        typer.echo(str(task))
-
-
-def main() -> None:
-    configure_logging()
-    demo_sources = [GeneratorSource(count=1, prefix="demo"), ApiSource([{"payload": "api data"}])]
-    collect_all(demo_sources)
-
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app()
