@@ -1,67 +1,50 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
-from collections import deque
-from typing import Any, Callable, Iterable, Iterator, TYPE_CHECKING
+import asyncio
+from typing import AsyncIterator, Iterable, TYPE_CHECKING
 
-PRIORITIES = ("low", "medium", "high", "critical")
+PRIORITIES = ("низкий", "средний", "высокий", "критический")
 
 if TYPE_CHECKING:
-    from src.task import StatusEnum, Task
+    from src.task import Task
 
-
-class _QueueIterator(Iterator["Task"]):
-    def __init__(self, tasks: tuple["Task", ...]) -> None:
-        self._tasks = tasks
-        self._index = 0
-
-    def __iter__(self) -> "_QueueIterator":
-        return self
-
-    def __next__(self) -> "Task":
-        if self._index >= len(self._tasks):
-            raise StopIteration
-        item = self._tasks[self._index]
-        self._index += 1
-        return item
-
-
-class TaskQueue(Iterable["Task"]):
+class TaskQueue:
     def __init__(self, initial: Iterable["Task"] | None = None) -> None:
-        self._queue = deque(initial or ())
+        self._queue: asyncio.Queue["Task" | None] = asyncio.Queue()
+        if initial:
+            for task in initial:
+                self._queue.put_nowait(task)
 
     def __len__(self) -> int:
-        return len(self._queue)
+        return self._queue.qsize()
 
-    def __iter__(self) -> Iterator["Task"]:
-        return _QueueIterator(tuple(self._queue))
+    def __aiter__(self) -> AsyncIterator["Task"]:
+        return self
 
-    def enqueue(self, task: "Task") -> None:
-        self._queue.append(task)
+    async def __anext__(self) -> "Task":
+        task = await self._queue.get()
+        if task is None:
+            self._queue.task_done()
+            raise StopAsyncIteration
+        return task
 
-    def dequeue(self) -> "Task":
-        if not self._queue:
+    async def enqueue(self, task: "Task") -> None:
+        await self._queue.put(task)
+
+    async def dequeue(self) -> "Task":
+        if self._queue.empty():
             raise IndexError("Очередь пуста")
-        return self._queue.popleft()
+        task = await self._queue.get()
+        if task is None:
+            self._queue.task_done()
+            raise IndexError("Очередь закрыта")
+        return task
 
-    def where(self, matcher: Callable[["Task"], bool]) -> Iterator["Task"]:
-        for task in self:
-            if matcher(task):
-                yield task
+    async def signal_done(self) -> None:
+        await self._queue.put(None)
 
-    filter = where
+    def task_done(self) -> None:
+        self._queue.task_done()
 
-    def filter_by_status(self, status: "StatusEnum") -> Iterator["Task"]:
-        yield from self.where(lambda task: task.status == status)
-
-    def filter_by_priority(self, priority: str) -> Iterator["Task"]:
-        normalized = str(priority).lower()
-        if normalized not in PRIORITIES:
-            raise ValueError(f"Недопустимый приоритет. Доступные: {PRIORITIES}")
-        yield from self.where(lambda task: task.priority == normalized)
-
-    @staticmethod
-    def stream(
-        tasks: Iterable["Task"], processor: Callable[["Task"], Any]
-    ) -> Iterator[Any]:
-        for task in tasks:
-            yield processor(task)
+    async def join(self) -> None:
+        await self._queue.join()
